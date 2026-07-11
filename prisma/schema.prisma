@@ -1,0 +1,393 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  KEPALA_SEKOLAH
+  TU
+  GURU
+  SISWA
+  AUDITOR
+}
+
+model User {
+  id            String    @id @default(cuid())
+  nip           String?   @unique // Nomor Induk Pegawai (untuk guru/staff)
+  nis           String?   @unique // Nomor Induk Siswa (untuk siswa)
+  email         String    @unique
+  passwordHash  String
+  namaLengkap   String
+  role          UserRole
+  avatar        String?
+  isActive      Boolean   @default(true)
+  emailVerified Boolean   @default(false)
+  lastLoginAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  documents         Document[]        @relation("DocumentCreator")
+  documentsUpdated  Document[]        @relation("DocumentUpdater")
+  uploads           DocumentUpload[]
+  auditLogs         AuditLog[]
+  disposisiFrom     Disposisi[]       @relation("DisposisiFrom")
+  disposisiTo       Disposisi[]       @relation("DisposisiTo")
+  sessions          Session[]
+  suratCreated      Surat[]           @relation("SuratCreator")
+  versionsCreated   DocumentVersion[] @relation("VersionCreator")
+  notifications     Notification[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique @db.VarChar(2048)
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ============================================
+// DOKUMEN (CORE)
+// ============================================
+
+enum DocumentCategory {
+  AKADEMIK
+  KESISWAAN
+  KEPEGAWAIAN
+  ADMINISTRATIF
+  KEUANGAN
+  LEGALITAS
+  MEDIA
+  LAINNYA
+}
+
+enum DocumentStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+  EXPIRED
+  DESTROYED
+}
+
+enum AccessLevel {
+  PUBLIC      // Bisa diakses semua user login
+  INTERNAL    // Hanya warga sekolah
+  RESTRICTED  // Hanya unit tertentu
+  CONFIDENTIAL // Hanya pihak tertentu
+  SECRET      // Hanya kepala sekolah + admin
+}
+
+model Document {
+  id              String          @id @default(cuid())
+  kodeDokumen     String          @unique // Kode unik dokumen
+  judul           String
+  deskripsi       String?         @db.Text
+  kategori        DocumentCategory
+  subKategori     String?
+  status          DocumentStatus  @default(ACTIVE)
+  accessLevel     AccessLevel     @default(INTERNAL)
+
+  // Metadata surat (opsional)
+  nomorSurat      String?
+  tanggalSurat    DateTime?
+  pengirim        String?
+  perihal         String?
+
+  // Retensi
+  tanggalDokumen  DateTime
+  masaRetensiThn  Int             @default(5) // Tahun
+  expiredAt       DateTime?
+
+  // File info
+  fileSize        Int             // bytes
+  mimeType        String
+  pageCount       Int?
+  checksum        String?         // SHA-256
+
+  // OCR & Search
+  ocrText         String?         @db.Text // Hasil OCR
+  isOcrProcessed  Boolean         @default(false)
+
+  // Tracking
+  viewCount       Int             @default(0)
+  downloadCount   Int             @default(0)
+
+  // Audit
+  createdById     String
+  updatedById     String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?       // Soft delete
+
+  // Relations
+  createdBy       User            @relation("DocumentCreator", fields: [createdById], references: [id])
+  updatedBy       User?           @relation("DocumentUpdater", fields: [updatedById], references: [id])
+  uploads         DocumentUpload[]
+  tags            DocumentTag[]
+  versions        DocumentVersion[]
+  accesses        DocumentAccess[]
+  surat           Surat?
+
+  // Indexes untuk pencarian cepat
+  @@index([kategori])
+  @@index([status])
+  @@index([accessLevel])
+  @@index([tanggalDokumen])
+  @@index([kodeDokumen])
+  @@index([createdById])
+  @@index([deletedAt])
+  @@map("documents")
+}
+
+model DocumentUpload {
+  id          String   @id @default(cuid())
+  documentId  String
+  fileName    String
+  filePath    String   // Path di storage
+  fileSize    Int
+  mimeType    String
+  version     Int      @default(1)
+  uploadedById String
+  createdAt   DateTime @default(now())
+
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation(fields: [uploadedById], references: [id])
+
+  @@index([documentId])
+  @@map("document_uploads")
+}
+
+model DocumentVersion {
+  id          String   @id @default(cuid())
+  documentId  String
+  version     Int
+  fileName    String
+  filePath    String
+  fileSize    Int
+  changeNote  String?  @db.Text
+  createdById String
+  createdAt   DateTime @default(now())
+
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy User     @relation("VersionCreator", fields: [createdById], references: [id])
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@map("document_versions")
+}
+
+model DocumentTag {
+  id         String @id @default(cuid())
+  documentId String
+  tag        String
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, tag])
+  @@index([tag])
+  @@map("document_tags")
+}
+
+model DocumentAccess {
+  id          String   @id @default(cuid())
+  documentId  String
+  userId      String?
+  action      String   // VIEW, DOWNLOAD, PRINT, SHARE
+  ipAddress   String?
+  userAgent   String?
+  accessedAt  DateTime @default(now())
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([userId])
+  @@index([accessedAt])
+  @@map("document_accesses")
+}
+
+// ============================================
+// SURAT MASUK & KELUAR
+// ============================================
+
+enum SuratType {
+  MASUK
+  KELUAR
+}
+
+enum SuratPriority {
+  BIASA
+  SEGERA
+  SANGAT_SEGERA
+}
+
+enum DisposisiStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+}
+
+model Surat {
+  id              String        @id @default(cuid())
+  documentId      String        @unique // Link ke Document
+  type            SuratType
+  nomorAgenda     String        @unique // Nomor pencatatan di buku agenda
+  nomorSurat      String
+  tanggalSurat    DateTime
+  tanggalTerima   DateTime?     // Khusus surat masuk
+  pengirim        String?       // Khusus surat masuk
+  tujuan          String?       // Khusus surat keluar
+  perihal         String
+  priority        SuratPriority @default(BIASA)
+  sifat           String?       // Biasa, Penting, Rahasia
+  catatan         String?       @db.Text
+  createdById     String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  document    Document      @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  createdBy   User          @relation("SuratCreator", fields: [createdById], references: [id])
+  disposisi   Disposisi[]
+
+  @@index([type])
+  @@index([tanggalSurat])
+  @@map("surat")
+}
+
+model Disposisi {
+  id            String           @id @default(cuid())
+  suratId       String
+  fromUserId    String
+  toUserId      String
+  instruksi     String           @db.Text
+  status        DisposisiStatus  @default(PENDING)
+  catatanRespon String?          @db.Text
+  respondedAt   DateTime?
+  createdAt     DateTime         @default(now())
+
+  surat    Surat @relation(fields: [suratId], references: [id], onDelete: Cascade)
+  fromUser User  @relation("DisposisiFrom", fields: [fromUserId], references: [id])
+  toUser   User  @relation("DisposisiTo", fields: [toUserId], references: [id])
+
+  @@index([suratId])
+  @@index([toUserId, status])
+  @@map("disposisi")
+}
+
+// ============================================
+// AUDIT LOG
+// ============================================
+
+enum AuditAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  DOWNLOAD
+  PRINT
+  SHARE
+  LOGIN
+  LOGOUT
+  DISPOSITION
+}
+
+model AuditLog {
+  id         String      @id @default(cuid())
+  userId     String?     // Null untuk sistem
+  action     AuditAction
+  entity     String      // "Document", "Surat", "User", dll
+  entityId   String?
+  metadata   Json?       // Data tambahan (IP, UA, dll)
+  oldValue   Json?       // Snapshot sebelum update
+  newValue   Json?       // Snapshot setelah update
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([entity, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ============================================
+// MASTER DATA
+// ============================================
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  message   String   @db.Text
+  type      String   @default("info") // info, warning, success, disposition, document, surat, system
+  link      String?  // URL to related entity
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model UnitKerja {
+  id        String   @id @default(cuid())
+  nama      String   @unique
+  kode      String   @unique
+  parentId  String?
+  createdAt DateTime @default(now())
+
+  parent UnitKerja? @relation("UnitHierarchy", fields: [parentId], references: [id])
+  children UnitKerja[] @relation("UnitHierarchy")
+
+  @@map("unit_kerja")
+}
+
+model KlasifikasiArsip {
+  id          String           @id @default(cuid())
+  kode        String           @unique // Misal: "KP.01.02"
+  nama        String
+  deskripsi   String?          @db.Text
+  kategori    DocumentCategory
+  retensiThn  Int              // Masa retensi dalam tahun
+  isActive    Boolean          @default(true)
+  parentId    String?
+  createdAt   DateTime         @default(now())
+
+  parent KlasifikasiArsip? @relation("KlasifikasiHierarchy", fields: [parentId], references: [id])
+  children KlasifikasiArsip[] @relation("KlasifikasiHierarchy")
+
+  @@index([kategori])
+  @@map("klasifikasi_arsip")
+}
+
