@@ -128,9 +128,20 @@
         <div class="space-y-6">
           <!-- File Info -->
           <div class="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/60 shadow-sm p-6">
-            <h3 class="text-sm font-bold text-gray-900 mb-4">File ({{ doc.uploads?.length || 1 }})</h3>
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-bold text-gray-900">File ({{ doc.uploads?.length || 1 }})</h3>
+              <label v-if="isAdmin || doc.createdBy?.id === user?.id" class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 text-primary-700 text-xs font-semibold rounded-lg hover:bg-primary-100 cursor-pointer transition-colors">
+                <Icon name="heroicons:plus" class="w-3.5 h-3.5" />
+                Tambah
+                <input type="file" class="hidden" multiple accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx" @change="handleAddFiles" />
+              </label>
+            </div>
+            <div v-if="isAddingFiles" class="mb-3 p-3 bg-primary-50 rounded-xl flex items-center gap-2">
+              <Icon name="heroicons:arrow-path" class="w-4 h-4 text-primary-600 animate-spin" />
+              <span class="text-xs text-primary-700 font-medium">Mengupload file...</span>
+            </div>
             <div v-if="doc.uploads?.length" class="space-y-2">
-              <div v-for="upload in doc.uploads" :key="upload.id" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50">
+              <div v-for="upload in doc.uploads" :key="upload.id" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 group">
                 <div class="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Icon name="heroicons:document-text" class="w-4 h-4 text-primary-600" />
                 </div>
@@ -138,9 +149,14 @@
                   <div class="text-sm font-medium text-gray-900 truncate">{{ upload.fileName }}</div>
                   <div class="text-xs text-gray-500">{{ formatSize(upload.fileSize) }}</div>
                 </div>
-                <a :href="`/api/documents/${doc.id}/download?uploadId=${upload.id}`" class="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg transition-colors">
-                  <Icon name="heroicons:arrow-down-tray" class="w-4 h-4" />
-                </a>
+                <div class="flex items-center gap-1">
+                  <a :href="`/api/documents/${doc.id}/download?uploadId=${upload.id}`" class="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg transition-colors" title="Download">
+                    <Icon name="heroicons:arrow-down-tray" class="w-4 h-4" />
+                  </a>
+                  <button v-if="isAdmin || doc.createdBy?.id === user?.id" @click="handleDeleteUpload(upload)" class="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Hapus file">
+                    <Icon name="heroicons:trash" class="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             </div>
             <div v-else class="space-y-3">
@@ -263,6 +279,7 @@ const toast = useToast()
 
 const showEditModal = ref(false)
 const showDeleteConfirm = ref(false)
+const isAddingFiles = ref(false)
 
 const { data: doc, pending, refresh: refreshDoc } = await useAsyncData(`doc-${route.params.id}`, () =>
   $fetch<{ data: any }>(`/api/documents/${route.params.id}`).then(r => r.data)
@@ -344,6 +361,40 @@ const handleRestoreVersion = async (version: any) => {
     refreshDoc()
   } catch {
     toast.error('Gagal mengembalikan versi')
+  }
+}
+
+const handleAddFiles = async (e: Event) => {
+  const input = e.target as HTMLInputElement
+  if (!input.files?.length || !doc.value) return
+
+  isAddingFiles.value = true
+  try {
+    const formData = new FormData()
+    for (const file of Array.from(input.files)) {
+      formData.append('files[]', file)
+    }
+    await $fetch(`/api/documents/${doc.value.id}/uploads`, { method: 'POST', body: formData })
+    toast.success(`${input.files.length} file berhasil ditambahkan!`)
+    refreshDoc()
+  } catch (err: any) {
+    toast.error(err?.data?.statusMessage || 'Gagal menambahkan file')
+  } finally {
+    isAddingFiles.value = false
+    input.value = ''
+  }
+}
+
+const handleDeleteUpload = async (upload: any) => {
+  if (!doc.value) return
+  if (!confirm(`Hapus file "${upload.fileName}"?`)) return
+
+  try {
+    await $fetch(`/api/documents/${doc.value.id}/uploads/${upload.id}`, { method: 'DELETE' })
+    toast.success('File berhasil dihapus!')
+    refreshDoc()
+  } catch (err: any) {
+    toast.error(err?.data?.statusMessage || 'Gagal menghapus file')
   }
 }
 </script>
