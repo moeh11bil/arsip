@@ -84,6 +84,7 @@ export default defineNuxtConfig({
 
   nitro: {
     compressPublicAssets: true,
+    bodyLimit: 50 * 1024 * 1024,
     alias: {
       '~': process.cwd(),
     },

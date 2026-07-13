@@ -88,15 +88,6 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: `Tidak dapat mengatur akses ${metadata.accessLevel}` })
   }
 
-  let ocrText = ''
-  let isOcrProcessed = false
-  try {
-    ocrText = await processOCR(firstFile.data, firstFile.type)
-    isOcrProcessed = true
-  } catch (error) {
-    console.error('OCR failed:', error)
-  }
-
   let kodeDokumen = ''
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -135,8 +126,8 @@ export default defineEventHandler(async (event) => {
       expiredAt,
       fileSize: firstFile.data.length,
       mimeType: firstFile.type,
-      ocrText,
-      isOcrProcessed,
+      ocrText: '',
+      isOcrProcessed: false,
       createdById: user.id,
       uploads: {
         create: uploadsData,
@@ -151,6 +142,8 @@ export default defineEventHandler(async (event) => {
       tags: true,
     },
   })
+
+  processOCRAsync(prisma, document.id, firstFile.data, firstFile.type)
 
   await logAudit(prisma, {
     userId: user.id,
@@ -167,6 +160,20 @@ export default defineEventHandler(async (event) => {
 
   return { success: true, data: document }
 })
+
+async function processOCRAsync(prisma: any, documentId: string, fileBuffer: Buffer, mimeType: string) {
+  try {
+    const ocrText = await processOCR(fileBuffer, mimeType)
+    if (ocrText) {
+      await prisma.document.update({
+        where: { id: documentId },
+        data: { ocrText, isOcrProcessed: true },
+      })
+    }
+  } catch (error) {
+    console.error('Async OCR failed for document', documentId, error)
+  }
+}
 
 async function generateKodeDokumen(prisma: any, kategori: string) {
   const prefix = {
