@@ -1,6 +1,6 @@
-import { getPrisma } from '../../../../utils/prisma'
-import { deleteFile } from '../../../../utils/storage'
-import { logAudit } from '../../../../utils/audit'
+import { getPrisma } from '../../../../../utils/prisma'
+import { deleteFile } from '../../../../../utils/storage'
+import { logAudit } from '../../../../../utils/audit'
 
 export default defineEventHandler(async (event) => {
   const user = event.context.user

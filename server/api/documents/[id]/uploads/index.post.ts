@@ -1,6 +1,6 @@
-import { getPrisma } from '../../../utils/prisma'
-import { saveFile } from '../../../utils/storage'
-import { logAudit } from '../../../utils/audit'
+import { getPrisma } from '../../../../utils/prisma'
+import { saveFile } from '../../../../utils/storage'
+import { logAudit } from '../../../../utils/audit'
 import { randomUUID } from 'crypto'
 
 export default defineEventHandler(async (event) => {
