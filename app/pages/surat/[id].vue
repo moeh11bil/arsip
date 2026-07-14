@@ -279,7 +279,7 @@ const handleDelete = async () => {
               <iframe
                 v-if="doc.mimeType === 'application/pdf'"
                 :src="`/api/documents/${doc.id}/preview`"
-                sandbox="allow-same-origin"
+                sandbox="allow-same-origin allow-scripts"
                 class="w-full h-[600px] rounded-xl border border-gray-200"
               />
               <img
