@@ -1,5 +1,5 @@
 import { getPrisma } from '../../../utils/prisma'
-import { join } from 'path'
+import { join, resolve } from 'path'
 import { existsSync } from 'fs'
 import { readFile } from 'node:fs/promises'
 import { logAudit } from '../../../utils/audit'
@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'File tidak ditemukan' })
   }
 
-  const storagePath = useRuntimeConfig().storagePath || join(process.cwd(), 'storage')
+  const storagePath = resolve(useRuntimeConfig().storagePath || join(process.cwd(), 'storage'))
   const filePath = join(storagePath, upload.filePath)
   if (!existsSync(filePath)) {
     throw createError({ statusCode: 404, statusMessage: 'File fisik tidak ditemukan' })
