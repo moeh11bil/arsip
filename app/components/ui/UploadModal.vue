@@ -216,7 +216,7 @@ const handleUpload = async () => {
     emit('update:modelValue', false)
     emit('uploaded')
   } catch (error: any) {
-    toast.error(error?.data?.message || 'Gagal upload dokumen')
+    toast.error(error?.data?.statusMessage || error?.data?.message || error?.message || 'Gagal upload dokumen')
   } finally {
     isUploading.value = false
   }

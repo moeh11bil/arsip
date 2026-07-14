@@ -1,8 +1,8 @@
 import { writeFile, mkdir, unlink } from 'node:fs/promises'
-import { join } from 'path'
+import { join, resolve } from 'path'
 
 export const saveFile = async (fileName: string, data: Buffer, mimeType: string): Promise<string> => {
-  const storagePath = useRuntimeConfig().storagePath || './storage'
+  const storagePath = resolve(useRuntimeConfig().storagePath || join(process.cwd(), 'storage'))
   const uploadDir = join(storagePath, 'uploads')
 
   await mkdir(uploadDir, { recursive: true })
@@ -16,7 +16,7 @@ export const saveFile = async (fileName: string, data: Buffer, mimeType: string)
 }
 
 export const deleteFile = async (filePath: string): Promise<void> => {
-  const storagePath = useRuntimeConfig().storagePath || './storage'
+  const storagePath = resolve(useRuntimeConfig().storagePath || join(process.cwd(), 'storage'))
   const fullPath = join(storagePath, filePath)
   try {
     await unlink(fullPath)
