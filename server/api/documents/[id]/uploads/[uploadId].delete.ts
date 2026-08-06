@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
 
   await logAudit(prisma, {
     userId: user.id,
-    action: 'DELETE_UPLOAD',
+    action: 'DELETE',
     entity: 'Document',
     entityId: id,
     metadata: { uploadId, fileName: upload.fileName, fileSize: upload.fileSize },

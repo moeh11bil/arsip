@@ -85,21 +85,21 @@
           <div class="bg-white/80 backdrop-blur-sm rounded-2xl border border-white/60 shadow-sm overflow-hidden">
             <div class="flex items-center justify-between p-6 border-b border-gray-100">
               <h2 class="text-lg font-bold text-gray-900">Preview</h2>
-              <a :href="`/api/documents/${doc.id}/preview`" target="_blank" class="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1">
+              <a :href="previewSrc" target="_blank" class="text-sm font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1">
                 Buka di tab baru
                 <Icon name="heroicons:arrow-top-right-on-square" class="w-4 h-4" />
               </a>
             </div>
             <div class="p-4">
               <iframe
-                v-if="doc.mimeType === 'application/pdf'"
-                :src="`/api/documents/${doc.id}/preview`"
+                v-if="previewIsPdf"
+                :src="previewSrc"
                 sandbox="allow-same-origin allow-scripts"
                 class="w-full h-[600px] rounded-xl border border-gray-200"
               />
               <img
-                v-else-if="doc.mimeType?.startsWith('image/')"
-                :src="`/api/documents/${doc.id}/preview`"
+                v-else-if="previewIsImage"
+                :src="previewSrc"
                 :alt="doc.judul"
                 class="max-w-full mx-auto rounded-xl border border-gray-200"
               />
@@ -141,7 +141,14 @@
               <span class="text-xs text-primary-700 font-medium">Mengupload file...</span>
             </div>
             <div v-if="doc.uploads?.length" class="space-y-2">
-              <div v-for="upload in doc.uploads" :key="upload.id" class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 group">
+              <div
+                v-for="upload in doc.uploads"
+                :key="upload.id"
+                @click="selectedUploadId = upload.id"
+                class="flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors group"
+                :class="isUploadSelected(upload.id) ? 'bg-primary-50 ring-1 ring-primary-200' : 'hover:bg-gray-50'"
+                :title="isUploadSelected(upload.id) ? 'Sedang dipratinjau' : 'Klik untuk pratinjau'"
+              >
                 <div class="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Icon name="heroicons:document-text" class="w-4 h-4 text-primary-600" />
                 </div>
@@ -150,10 +157,11 @@
                   <div class="text-xs text-gray-500">{{ formatSize(upload.fileSize) }}</div>
                 </div>
                 <div class="flex items-center gap-1">
-                  <a :href="`/api/documents/${doc.id}/download?uploadId=${upload.id}`" class="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg transition-colors" title="Download">
+                  <Icon v-if="isUploadSelected(upload.id)" name="heroicons:eye" class="w-4 h-4 text-primary-600" />
+                  <a :href="`/api/documents/${doc.id}/download?uploadId=${upload.id}`" @click.stop class="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg transition-colors" title="Download">
                     <Icon name="heroicons:arrow-down-tray" class="w-4 h-4" />
                   </a>
-                  <button v-if="isAdmin || doc.createdBy?.id === user?.id" @click="handleDeleteUpload(upload)" class="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Hapus file">
+                  <button v-if="isAdmin || doc.createdBy?.id === user?.id" @click.stop="handleDeleteUpload(upload)" class="p-1.5 text-gray-400 hover:text-red-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Hapus file">
                     <Icon name="heroicons:trash" class="w-4 h-4" />
                   </button>
                 </div>
@@ -280,6 +288,7 @@ const toast = useToast()
 const showEditModal = ref(false)
 const showDeleteConfirm = ref(false)
 const isAddingFiles = ref(false)
+const selectedUploadId = ref<string | null>(null)
 
 const { data: doc, pending, refresh: refreshDoc } = await useAsyncData(`doc-${route.params.id}`, () =>
   $fetch<{ data: any }>(`/api/documents/${route.params.id}`).then(r => r.data)
@@ -313,8 +322,36 @@ const accessColors: Record<string, string> = {
   CONFIDENTIAL: 'bg-red-100 text-red-700',
 }
 
+const previewUpload = computed(() => {
+  const uploads = doc.value?.uploads || []
+  if (!uploads.length) return null
+  return uploads.find(u => u.id === selectedUploadId.value) || uploads[0]
+})
+
+watch(() => doc.value?.uploads, (uploads) => {
+  if (uploads?.length) {
+    if (!uploads.some(u => u.id === selectedUploadId.value)) {
+      selectedUploadId.value = uploads[0].id
+    }
+  } else {
+    selectedUploadId.value = null
+  }
+}, { immediate: true })
+
+const previewSrc = computed(() => {
+  if (!doc.value) return ''
+  const base = `/api/documents/${doc.value.id}/preview`
+  return previewUpload.value ? `${base}?uploadId=${previewUpload.value.id}` : base
+})
+
+const previewMime = computed(() => previewUpload.value?.mimeType || doc.value?.mimeType || '')
+const previewIsPdf = computed(() => previewMime.value === 'application/pdf' || previewMime.value.includes('pdf'))
+const previewIsImage = computed(() => previewMime.value.startsWith('image/'))
+
+const isUploadSelected = (id: string) => selectedUploadId.value === id
+
 const fileTypeStyle = computed(() => {
-  const mime = doc.value?.mimeType || ''
+  const mime = previewMime.value
   if (mime.includes('word') || mime.includes('document')) {
     return { bg: 'bg-blue-100', icon: 'heroicons:document-text', iconColor: 'text-blue-600', label: 'Microsoft Word' }
   }

@@ -6,6 +6,8 @@ import { ACCESS_ROLE_MAP } from '../../../utils/access'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
+  const query = getQuery(event)
+  const uploadId = query.uploadId as string | undefined
   const prisma = getPrisma()
   const userRole = event.context.user?.role
 
@@ -23,7 +25,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Tidak memiliki akses ke dokumen ini' })
   }
 
-  const upload = document.uploads[0]
+  let upload
+  if (uploadId) {
+    upload = document.uploads.find(u => u.id === uploadId)
+  } else {
+    upload = document.uploads[0]
+  }
   if (!upload) {
     throw createError({ statusCode: 404, statusMessage: 'File tidak ditemukan' })
   }

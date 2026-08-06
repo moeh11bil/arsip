@@ -57,7 +57,7 @@ export default defineEventHandler(async (event) => {
 
   await logAudit(prisma, {
     userId: user.id,
-    action: 'ADD_UPLOAD',
+    action: 'CREATE',
     entity: 'Document',
     entityId: id,
     metadata: { files: fileItems.map(f => ({ fileName: f.filename, fileSize: f.data.length })) },
