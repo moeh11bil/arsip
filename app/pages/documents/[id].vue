@@ -140,7 +140,7 @@
               <Icon name="heroicons:arrow-path" class="w-4 h-4 text-primary-600 animate-spin" />
               <span class="text-xs text-primary-700 font-medium">Mengupload file...</span>
             </div>
-            <div v-if="doc.uploads?.length" class="space-y-2">
+            <div v-if="doc.uploads?.length" class="space-y-2 max-h-60 overflow-y-auto overscroll-contain pr-1 file-scroll">
               <div
                 v-for="upload in doc.uploads"
                 :key="upload.id"
@@ -435,3 +435,20 @@ const handleDeleteUpload = async (upload: any) => {
   }
 }
 </script>
+
+<style scoped>
+.file-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.file-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.file-scroll::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+.file-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}
+</style>
