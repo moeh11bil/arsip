@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
     where: { id, deletedAt: null },
     include: {
       createdBy: { select: { id: true, namaLengkap: true, role: true } },
-      uploads: true,
+      uploads: { orderBy: [{ version: 'asc' }, { createdAt: 'asc' }] },
       tags: true,
       versions: {
         include: {
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Dokumen tidak ditemukan' })
   }
 
-  const allowedRoles = ACCESS_ROLE_MAP[document.accessLevel] || ACCESS_ROLE_MAP.INTERNAL
+  const allowedRoles = ACCESS_ROLE_MAP[document.accessLevel] || ACCESS_ROLE_MAP.INTERNAL || []
   if (!allowedRoles.includes(userRole)) {
     throw createError({ statusCode: 403, statusMessage: 'Tidak memiliki akses ke dokumen ini' })
   }
@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
       where: { id },
       include: {
         createdBy: { select: { id: true, namaLengkap: true, role: true } },
-        uploads: true,
+        uploads: { orderBy: [{ version: 'asc' }, { createdAt: 'asc' }] },
         tags: true,
         versions: {
           include: {

@@ -1,5 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import pkg from '@prisma/client'
 import bcrypt from 'bcryptjs'
+const { PrismaClient } = pkg
 
 const prisma = new PrismaClient()
 

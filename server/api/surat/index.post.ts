@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => {
 
   const parsed = suratCreateSchema.safeParse(fields)
   if (!parsed.success) {
-    throw createError({ statusCode: 400, statusMessage: parsed.error.errors[0].message })
+    throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0].message })
   }
 
   const { type, priority, nomorSurat, perihal, tanggalSurat, tanggalTerima, nomorAgenda, pengirim, tujuan, sifat, catatan } = parsed.data
@@ -131,7 +131,7 @@ export default defineEventHandler(async (event) => {
     const label = isMasuk ? 'Surat Masuk Baru' : 'Surat Keluar Baru'
     await createNotifikasiBulk(
       prisma,
-      notifTargets.map(u => ({
+      notifTargets.map((u: any) => ({
         userId: u.id,
         title: label,
         message: `${surat.nomorSurat} - ${surat.perihal}`,

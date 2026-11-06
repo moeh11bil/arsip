@@ -88,7 +88,7 @@ export default defineNuxtConfig({
     alias: {
       '~': process.cwd(),
     },
-  },
+  } as any,
 
   typescript: {
     strict: true,

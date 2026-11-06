@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Tidak memiliki akses' })
   }
 
-  const document = await prisma.document.findUnique({ where: { id } })
+  const document = await prisma.document.findUnique({ where: { id: id! } })
   if (!document || document.deletedAt) {
     throw createError({ statusCode: 404, statusMessage: 'Dokumen tidak ditemukan' })
   }
@@ -35,18 +35,18 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const existingCount = await prisma.documentUpload.count({ where: { documentId: id } })
+  const existingCount = await prisma.documentUpload.count({ where: { documentId: id! } })
 
   const uploadsData = await Promise.all(
     fileItems.map(async (fi, idx) => {
-      const fileName = `${randomUUID()}-${fi.filename}`
-      const filePath = await saveFile(fileName, fi.data, fi.type)
+      const fileName = `${randomUUID()}-${fi.filename || 'file'}`
+      const filePath = await saveFile(fileName, fi.data, fi.type || 'application/octet-stream')
       return {
-        documentId: id,
-        fileName: fi.filename,
+        documentId: id!,
+        fileName: fi.filename || 'file',
         filePath,
         fileSize: fi.data.length,
-        mimeType: fi.type,
+        mimeType: fi.type || 'application/octet-stream',
         version: existingCount + idx + 1,
         uploadedById: user.id,
       }

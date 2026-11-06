@@ -170,8 +170,9 @@ async function exportPDF(event: any, documents: any[]) {
     ]
 
     vals.forEach((val, i) => {
-      doc.text(String(val), x + 2, y + 2, { width: columns[i].width - 4, align: 'left' })
-      x += columns[i].width
+      const col = columns[i]!
+      doc.text(String(val), x + 2, y + 2, { width: col.width - 4, align: 'left' })
+      x += col.width
     })
 
     y += 14

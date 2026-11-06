@@ -22,11 +22,11 @@ export default defineEventHandler(async (event) => {
 
   const parsed = updateDocumentSchema.safeParse(body)
   if (!parsed.success) {
-    throw createError({ statusCode: 400, statusMessage: parsed.error.errors[0].message })
+    throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message || 'Data tidak valid' })
   }
 
   const existing = await prisma.document.findUnique({
-    where: { id, deletedAt: null },
+    where: { id: id!, deletedAt: null },
     include: { uploads: { orderBy: { createdAt: 'desc' }, take: 1 } },
   })
   if (!existing) {
@@ -43,12 +43,12 @@ export default defineEventHandler(async (event) => {
 
   const latestUpload = existing.uploads[0]
   const currentVersion = await prisma.documentVersion.count({
-    where: { documentId: id },
+    where: { documentId: id! },
   })
 
   await prisma.documentVersion.create({
     data: {
-      documentId: id,
+      documentId: id!,
       version: currentVersion + 1,
       fileName: latestUpload?.fileName || existing.judul,
       filePath: latestUpload?.filePath || '',

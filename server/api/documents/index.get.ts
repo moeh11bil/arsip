@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { getPrisma } from '../../utils/prisma'
-import { DocumentCategory, DocumentStatus, AccessLevel } from '@prisma/client'
+import pkg from '@prisma/client'
+const { DocumentCategory, DocumentStatus, AccessLevel } = pkg
 
 const querySchema = z.object({
   page: z.coerce.number().min(1).default(1),

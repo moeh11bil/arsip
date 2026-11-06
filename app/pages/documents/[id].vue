@@ -142,22 +142,66 @@
             </div>
             <div v-if="doc.uploads?.length" class="space-y-2 max-h-60 overflow-y-auto overscroll-contain pr-1 file-scroll">
               <div
-                v-for="upload in doc.uploads"
+                v-for="(upload, index) in doc.uploads"
                 :key="upload.id"
                 @click="selectedUploadId = upload.id"
+                @dragover.prevent="onDragOver(index)"
+                @drop.prevent="onDrop(index)"
                 class="flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors group"
-                :class="isUploadSelected(upload.id) ? 'bg-primary-50 ring-1 ring-primary-200' : 'hover:bg-gray-50'"
+                :class="[isUploadSelected(upload.id) ? 'bg-primary-50 ring-1 ring-primary-200' : 'hover:bg-gray-50', dragOverIndex === index ? 'ring-2 ring-primary-300' : '']"
                 :title="isUploadSelected(upload.id) ? 'Sedang dipratinjau' : 'Klik untuk pratinjau'"
               >
                 <div class="w-8 h-8 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Icon name="heroicons:document-text" class="w-4 h-4 text-primary-600" />
                 </div>
                 <div class="flex-1 min-w-0">
-                  <div class="text-sm font-medium text-gray-900 truncate">{{ upload.fileName }}</div>
+                  <template v-if="renamingUploadId === upload.id">
+                    <div class="flex items-center gap-1" @click.stop>
+                      <input
+                        v-model="renameValue"
+                        type="text"
+                        maxlength="255"
+                        class="w-full px-2 py-1 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        @keyup.enter="saveRename(upload)"
+                        @keyup.esc="cancelRename"
+                        :disabled="isSavingRename"
+                      />
+                      <button @click="saveRename(upload)" :disabled="isSavingRename" class="p-1 text-green-600 hover:text-green-700" title="Simpan">
+                        <Icon name="heroicons:check" class="w-4 h-4" />
+                      </button>
+                      <button @click="cancelRename" :disabled="isSavingRename" class="p-1 text-gray-400 hover:text-gray-600" title="Batal">
+                        <Icon name="heroicons:x-mark" class="w-4 h-4" />
+                      </button>
+                    </div>
+                  </template>
+                  <template v-else>
+                    <div class="text-sm font-medium text-gray-900 truncate">{{ upload.fileName }}</div>
+                  </template>
                   <div class="text-xs text-gray-500">{{ formatSize(upload.fileSize) }}</div>
                 </div>
                 <div class="flex items-center gap-1">
                   <Icon v-if="isUploadSelected(upload.id)" name="heroicons:eye" class="w-4 h-4 text-primary-600" />
+                  <template v-if="isAdmin || doc.createdBy?.id === user?.id">
+                    <span
+                      v-if="doc.uploads.length > 1"
+                      draggable="true"
+                      @dragstart="onDragStart(index)"
+                      @dragend="resetDrag"
+                      class="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100"
+                      title="Geser untuk mengubah urutan"
+                    >
+                      <Icon name="heroicons:bars-3" class="w-4 h-4" />
+                    </span>
+                    <button @click.stop="startRename(upload)" class="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg transition-colors opacity-0 group-hover:opacity-100" title="Ubah nama file">
+                      <Icon name="heroicons:pencil" class="w-4 h-4" />
+                    </button>
+                    <button v-if="doc.uploads.length > 1" @click.stop="moveUpload(index, -1)" :disabled="index === 0 || isReordering" class="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg transition-colors disabled:opacity-30" title="Pindah ke atas">
+                      <Icon name="heroicons:arrow-up" class="w-4 h-4" />
+                    </button>
+                    <button v-if="doc.uploads.length > 1" @click.stop="moveUpload(index, 1)" :disabled="index === doc.uploads.length - 1 || isReordering" class="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg transition-colors disabled:opacity-30" title="Pindah ke bawah">
+                      <Icon name="heroicons:arrow-down" class="w-4 h-4" />
+                    </button>
+                  </template>
                   <a :href="`/api/documents/${doc.id}/download?uploadId=${upload.id}`" @click.stop class="p-1.5 text-gray-400 hover:text-primary-600 rounded-lg transition-colors" title="Download">
                     <Icon name="heroicons:arrow-down-tray" class="w-4 h-4" />
                   </a>
@@ -289,6 +333,12 @@ const showEditModal = ref(false)
 const showDeleteConfirm = ref(false)
 const isAddingFiles = ref(false)
 const selectedUploadId = ref<string | null>(null)
+const renamingUploadId = ref<string | null>(null)
+const renameValue = ref('')
+const isSavingRename = ref(false)
+const isReordering = ref(false)
+const draggedIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
 
 const { data: doc, pending, refresh: refreshDoc } = await useAsyncData(`doc-${route.params.id}`, () =>
   $fetch<{ data: any }>(`/api/documents/${route.params.id}`).then(r => r.data)
@@ -325,12 +375,12 @@ const accessColors: Record<string, string> = {
 const previewUpload = computed(() => {
   const uploads = doc.value?.uploads || []
   if (!uploads.length) return null
-  return uploads.find(u => u.id === selectedUploadId.value) || uploads[0]
+  return uploads.find((u: any) => u.id === selectedUploadId.value) || uploads[0]
 })
 
 watch(() => doc.value?.uploads, (uploads) => {
   if (uploads?.length) {
-    if (!uploads.some(u => u.id === selectedUploadId.value)) {
+    if (!uploads.some((u: any) => u.id === selectedUploadId.value)) {
       selectedUploadId.value = uploads[0].id
     }
   } else {
@@ -422,12 +472,108 @@ const handleAddFiles = async (e: Event) => {
   }
 }
 
+const startRename = (upload: any) => {
+  renamingUploadId.value = upload.id
+  renameValue.value = upload.fileName
+}
+
+const cancelRename = () => {
+  renamingUploadId.value = null
+  renameValue.value = ''
+}
+
+const saveRename = async (upload: any) => {
+  if (!doc.value || !renameValue.value.trim()) {
+    toast.error('Nama file wajib diisi')
+    return
+  }
+  isSavingRename.value = true
+  try {
+    await $fetch(`/api/documents/${doc.value.id}/uploads/${upload.id}`, {
+      method: 'PUT',
+      body: { fileName: renameValue.value.trim() },
+    })
+    toast.success('Nama file berhasil diubah')
+    cancelRename()
+    refreshDoc()
+  } catch (err: any) {
+    toast.error(err?.data?.statusMessage || 'Gagal mengubah nama file')
+  } finally {
+    isSavingRename.value = false
+  }
+}
+
+const resetDrag = () => {
+  draggedIndex.value = null
+  dragOverIndex.value = null
+}
+
+const onDragStart = (index: number) => {
+  draggedIndex.value = index
+}
+
+const onDragOver = (index: number) => {
+  if (draggedIndex.value !== null && draggedIndex.value !== index) {
+    dragOverIndex.value = index
+  }
+}
+
+const onDrop = async (index: number) => {
+  if (draggedIndex.value === null || draggedIndex.value === index || !doc.value?.uploads?.length) {
+    resetDrag()
+    return
+  }
+
+  const uploads = [...doc.value.uploads]
+  const [moved] = uploads.splice(draggedIndex.value, 1)
+  uploads.splice(index, 0, moved)
+  const uploadIds = uploads.map((u: any) => u.id)
+
+  isReordering.value = true
+  try {
+    await $fetch(`/api/documents/${doc.value.id}/uploads/reorder`, {
+      method: 'PUT',
+      body: { uploadIds },
+    })
+    refreshDoc()
+  } catch (err: any) {
+    toast.error(err?.data?.statusMessage || 'Gagal mengubah urutan file')
+  } finally {
+    isReordering.value = false
+    resetDrag()
+  }
+}
+
+const moveUpload = async (index: number, direction: number) => {
+  if (!doc.value?.uploads?.length) return
+  const uploads = [...doc.value.uploads]
+  const newIndex = index + direction
+  if (newIndex < 0 || newIndex >= uploads.length) return
+
+  const [moved] = uploads.splice(index, 1)
+  uploads.splice(newIndex, 0, moved)
+  const uploadIds = uploads.map((u: any) => u.id)
+
+  isReordering.value = true
+  try {
+    await $fetch(`/api/documents/${doc.value.id}/uploads/reorder`, {
+      method: 'PUT',
+      body: { uploadIds },
+    })
+    refreshDoc()
+  } catch (err: any) {
+    toast.error(err?.data?.statusMessage || 'Gagal mengubah urutan file')
+  } finally {
+    isReordering.value = false
+  }
+}
+
 const handleDeleteUpload = async (upload: any) => {
   if (!doc.value) return
   if (!confirm(`Hapus file "${upload.fileName}"?`)) return
 
   try {
-    await $fetch(`/api/documents/${doc.value.id}/uploads/${upload.id}`, { method: 'DELETE' })
+    await $fetch(`/api/documents/${doc.value.id}/uploads/${upload.id}`, { method: 'DELETE' as any })
     toast.success('File berhasil dihapus!')
     refreshDoc()
   } catch (err: any) {

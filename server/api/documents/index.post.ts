@@ -4,7 +4,9 @@ import { saveFile } from '../../utils/storage'
 import { logAudit } from '../../utils/audit'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
-import { DocumentCategory, AccessLevel } from '@prisma/client'
+import pkg from '@prisma/client'
+import type { AccessLevel as AccessLevelType } from '@prisma/client'
+const { DocumentCategory, AccessLevel } = pkg
 
 const docSchema = z.object({
   judul: z.string().min(1, 'Judul wajib diisi'),
@@ -56,17 +58,17 @@ export default defineEventHandler(async (event) => {
       tags: getFieldValue('tags')?.split(',').map(t => t.trim()).filter(Boolean) || [],
     }
 
-    const parsed = docSchema.safeParse({ judul: metadata.judul, kategori: metadata.kategori, accessLevel: metadata.accessLevel, deskripsi: metadata.deskripsi })
+    const parsed = docSchema.safeParse({ judul: metadata.judul!, kategori: metadata.kategori, accessLevel: metadata.accessLevel, deskripsi: metadata.deskripsi })
     if (!parsed.success) {
-      throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0].message })
+      throw createError({ statusCode: 400, statusMessage: parsed.error.issues[0]?.message || 'Data tidak valid' })
     }
 
     const uploadsData = await Promise.all(
       fileItems.map(async (fi) => {
-        const fileName = `${randomUUID()}-${fi.filename}`
-        const filePath = await saveFile(fileName, fi.data, fi.type)
+        const fileName = `${randomUUID()}-${fi.filename || 'file'}`
+        const filePath = await saveFile(fileName, fi.data, fi.type || 'application/octet-stream')
         return {
-          fileName: fi.filename,
+          fileName: fi.filename || 'file',
           filePath,
           fileSize: fi.data.length,
           mimeType: fi.type || 'application/octet-stream',
@@ -75,7 +77,7 @@ export default defineEventHandler(async (event) => {
       })
     )
 
-    const firstFile = fileItems[0]
+    const firstFile = fileItems[0]!
 
     const maxAccessLevel: Record<string, number> = {
       GURU: 1,
@@ -94,7 +96,7 @@ export default defineEventHandler(async (event) => {
     let kodeDokumen = ''
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        kodeDokumen = await generateKodeDokumen(prisma, metadata.kategori)
+        kodeDokumen = await generateKodeDokumen(prisma, metadata.kategori!)
         break
       } catch (err: any) {
         if (err?.code !== 'P2002' || attempt === 2) throw err
@@ -104,7 +106,7 @@ export default defineEventHandler(async (event) => {
     let masaRetensiThn = 5
     if (metadata.subKategori) {
       const klasifikasi = await prisma.klasifikasiArsip.findFirst({
-        where: { nama: metadata.subKategori, kategori: metadata.kategori },
+        where: { nama: metadata.subKategori, kategori: metadata.kategori as any },
       })
       if (klasifikasi) masaRetensiThn = klasifikasi.retensiThn
     }
@@ -115,11 +117,11 @@ export default defineEventHandler(async (event) => {
     const document = await prisma.document.create({
       data: {
         kodeDokumen,
-        judul: metadata.judul,
+        judul: metadata.judul!,
         deskripsi: metadata.deskripsi,
-        kategori: metadata.kategori,
+        kategori: metadata.kategori as any,
         subKategori: metadata.subKategori,
-        accessLevel: metadata.accessLevel,
+        accessLevel: metadata.accessLevel as AccessLevelType,
         nomorSurat: metadata.nomorSurat,
         tanggalSurat: metadata.tanggalSurat ? new Date(metadata.tanggalSurat) : null,
         pengirim: metadata.pengirim,
@@ -146,7 +148,7 @@ export default defineEventHandler(async (event) => {
       },
     })
 
-    processOCRAsync(prisma, document.id, firstFile.data, firstFile.type)
+    processOCRAsync(prisma, document.id, firstFile.data, firstFile.type || 'application/octet-stream')
 
     await logAudit(prisma, {
       userId: user.id,

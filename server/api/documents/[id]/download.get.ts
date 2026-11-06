@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Dokumen tidak ditemukan' })
   }
 
-  const allowedRoles = ACCESS_ROLE_MAP[document.accessLevel] || ACCESS_ROLE_MAP.INTERNAL
+  const allowedRoles = ACCESS_ROLE_MAP[document.accessLevel] || ACCESS_ROLE_MAP.INTERNAL || []
   if (!allowedRoles.includes(userRole)) {
     throw createError({ statusCode: 403, statusMessage: 'Tidak memiliki akses ke dokumen ini' })
   }

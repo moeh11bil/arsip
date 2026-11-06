@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Dokumen tidak ditemukan' })
   }
 
-  const allowedRoles = ACCESS_ROLE_MAP[document.accessLevel] || ACCESS_ROLE_MAP.INTERNAL
+  const allowedRoles = ACCESS_ROLE_MAP[document.accessLevel] || ACCESS_ROLE_MAP.INTERNAL || []
   if (!allowedRoles.includes(userRole)) {
     throw createError({ statusCode: 403, statusMessage: 'Tidak memiliki akses ke dokumen ini' })
   }
@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
   const fileBuffer = await readFile(filePath)
 
   setResponseHeader(event, 'Content-Type', upload.mimeType)
-  setResponseHeader(event, 'Content-Length', String(fileBuffer.length))
+  setResponseHeader(event, 'Content-Length', fileBuffer.length)
 
   if (upload.mimeType.startsWith('image/')) {
     setResponseHeader(event, 'Cache-Control', 'public, max-age=86400')
